@@ -1,41 +1,265 @@
-# Compiled Lua sources
-luac.out
+local player = game.Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+local camera = workspace.CurrentCamera
 
-# luarocks build files
-*.src.rock
-*.zip
-*.tar.gz
+-- Clear old GUI if exists
+local oldGui = playerGui:FindFirstChild("c00lFlyBannerJumpESP")
+if oldGui then oldGui:Destroy() end
 
-# Object files
-*.o
-*.os
-*.ko
-*.obj
-*.elf
+-- Create main ScreenGui
+local gui = Instance.new("ScreenGui")
+gui.Name = "c00lFlyBannerJumpESP"
+gui.Parent = playerGui
 
-# Precompiled Headers
-*.gch
-*.pch
+-- === Banner (red arcade font, no frame) ===
+local banner = Instance.new("TextLabel")
+banner.Name = "TopBanner"
+banner.Parent = gui
+banner.Size = UDim2.new(1, 0, 0, 40)
+banner.Position = UDim2.new(0, 0, 0, 0)
+banner.BackgroundTransparency = 1 -- no background/frame visible
+banner.TextColor3 = Color3.fromRGB(255, 0, 0) -- RED text
+banner.TextStrokeTransparency = 0.3
+banner.TextStrokeColor3 = Color3.new(0, 0, 0)
+banner.Font = Enum.Font.Arcade
+banner.TextSize = 30
+banner.Text = "TEAM C00LKIDD JOIN TODAY!"
+banner.Visible = false
 
-# Libraries
-*.lib
-*.a
-*.la
-*.lo
-*.def
-*.exp
+-- === Banner Toggle Button ===
+local toggleButton = Instance.new("TextButton")
+toggleButton.Name = "BannerToggle"
+toggleButton.Parent = gui
+toggleButton.Size = UDim2.new(0, 150, 0, 40)
+toggleButton.Position = UDim2.new(0, 20, 0, 50)
+toggleButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+toggleButton.TextColor3 = Color3.fromRGB(255, 0, 0)
+toggleButton.Font = Enum.Font.Arcade
+toggleButton.TextSize = 18
+toggleButton.Text = "Toggle Banner"
 
-# Shared objects (inc. Windows DLLs)
-*.dll
-*.so
-*.so.*
-*.dylib
+toggleButton.MouseButton1Click:Connect(function()
+	banner.Visible = not banner.Visible
+end)
 
-# Executables
-*.exe
-*.out
-*.app
-*.i*86
-*.x86_64
-*.hex
+-- === Fly Button ===
+local flyButton = Instance.new("TextButton")
+flyButton.Name = "FlyButton"
+flyButton.Parent = gui
+flyButton.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+flyButton.Position = UDim2.new(0, 20, 0, 100)
+flyButton.Size = UDim2.new(0, 100, 0, 40)
+flyButton.Font = Enum.Font.GothamBold
+flyButton.Text = "Fly 🛫"
+flyButton.TextColor3 = Color3.fromRGB(0, 255, 127)
+flyButton.TextSize = 20
+flyButton.BorderSizePixel = 2
+flyButton.BorderColor3 = Color3.fromRGB(0, 255, 127)
 
+-- === Infinite Jump Button ===
+local infiniteJumpEnabled = false
+
+local jumpButton = Instance.new("TextButton")
+jumpButton.Name = "InfiniteJumpButton"
+jumpButton.Parent = gui
+jumpButton.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+jumpButton.Position = UDim2.new(0, 20, 0, 150)
+jumpButton.Size = UDim2.new(0, 150, 0, 40)
+jumpButton.Font = Enum.Font.GothamBold
+jumpButton.Text = "Infinite Jump OFF"
+jumpButton.TextColor3 = Color3.fromRGB(255, 255, 0)
+jumpButton.TextSize = 20
+jumpButton.BorderSizePixel = 2
+jumpButton.BorderColor3 = Color3.fromRGB(255, 255, 0)
+
+-- === ESP Setup ===
+local espFolder = Instance.new("Folder")
+espFolder.Name = "ESPFolder"
+espFolder.Parent = playerGui
+
+local espEnabled = false
+local adornments = {}
+
+local function getPrimaryPart(model)
+	return model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("Torso") or model:FindFirstChild("UpperTorso")
+end
+
+local function addESPToModel(model)
+	if adornments[model] then return end
+
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	if not humanoid then return end
+
+	local primaryPart = getPrimaryPart(model)
+	if not primaryPart then return end
+
+	local box = Instance.new("BoxHandleAdornment")
+	box.Adornee = primaryPart
+	box.AlwaysOnTop = true
+	box.ZIndex = 10
+	box.Size = Vector3.new(4, 5, 2)
+	box.Color3 = Color3.new(1, 0, 0) -- red
+	box.Transparency = 0.5
+	box.Parent = espFolder
+	box.Visible = espEnabled
+
+	adornments[model] = box
+
+	model.AncestryChanged:Connect(function(_, parent)
+		if not parent and adornments[model] then
+			adornments[model]:Destroy()
+			adornments[model] = nil
+		end
+	end)
+end
+
+local function scanWorkspace()
+	for _, obj in pairs(workspace:GetDescendants()) do
+		if obj:IsA("Model") and obj:FindFirstChildOfClass("Humanoid") then
+			addESPToModel(obj)
+		end
+	end
+end
+
+scanWorkspace()
+
+workspace.DescendantAdded:Connect(function(obj)
+	if obj:IsA("Model") and obj:FindFirstChildOfClass("Humanoid") then
+		addESPToModel(obj)
+	end
+end)
+
+-- === ESP Button ===
+local espButton = Instance.new("TextButton")
+espButton.Name = "ESPButton"
+espButton.Parent = gui
+espButton.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+espButton.Position = UDim2.new(0, 20, 0, 200)
+espButton.Size = UDim2.new(0, 100, 0, 40)
+espButton.Font = Enum.Font.GothamBold
+espButton.Text = "ESP OFF"
+espButton.TextColor3 = Color3.fromRGB(255, 0, 0)
+espButton.TextSize = 20
+espButton.BorderSizePixel = 2
+espButton.BorderColor3 = Color3.fromRGB(255, 0, 0)
+
+-- === Fly Logic ===
+local flying = false
+local bodyGyro, bodyVelocity
+local directionVector = Vector3.zero
+
+local UIS = game:GetService("UserInputService")
+
+local directions = {
+	[Enum.KeyCode.W] = Vector3.new(0, 0, -1),
+	[Enum.KeyCode.S] = Vector3.new(0, 0, 1),
+	[Enum.KeyCode.A] = Vector3.new(-1, 0, 0),
+	[Enum.KeyCode.D] = Vector3.new(1, 0, 0),
+}
+
+UIS.InputBegan:Connect(function(input, gpe)
+	if gpe or not flying then return end
+	if directions[input.KeyCode] then
+		directionVector += directions[input.KeyCode]
+	end
+end)
+
+UIS.InputEnded:Connect(function(input, gpe)
+	if gpe or not flying then return end
+	if directions[input.KeyCode] then
+		directionVector -= directions[input.KeyCode]
+	end
+end)
+
+flyButton.MouseButton1Click:Connect(function()
+	flying = not flying
+	flyButton.Text = flying and "Unfly ⛔" or "Fly 🛫"
+
+	if flying then
+		local character = player.Character or player.CharacterAdded:Wait()
+		local hrp = character:WaitForChild("HumanoidRootPart")
+
+		bodyGyro = Instance.new("BodyGyro", hrp)
+		bodyVelocity = Instance.new("BodyVelocity", hrp)
+		bodyGyro.P = 9e4
+		bodyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+		bodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+
+		local speed = 50
+
+		spawn(function()
+			while flying and hrp.Parent do
+				task.wait()
+				local camCF = camera.CFrame
+				local moveDir = camCF:VectorToWorldSpace(directionVector)
+				if directionVector.Magnitude > 0 then
+					moveDir = moveDir.Unit
+					bodyVelocity.Velocity = moveDir * speed
+				else
+					bodyVelocity.Velocity = Vector3.zero
+				end
+				bodyGyro.CFrame = camCF
+			end
+		end)
+	else
+		if bodyGyro then bodyGyro:Destroy() end
+		if bodyVelocity then bodyVelocity:Destroy() end
+		directionVector = Vector3.zero
+	end
+end)
+
+-- === Infinite Jump Logic ===
+jumpButton.MouseButton1Click:Connect(function()
+	infiniteJumpEnabled = not infiniteJumpEnabled
+	jumpButton.Text = infiniteJumpEnabled and "Infinite Jump ON" or "Infinite Jump OFF"
+end)
+
+UIS.JumpRequest:Connect(function()
+	if infiniteJumpEnabled then
+		local character = player.Character
+		if not character then return end
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+		end
+	end
+end)
+
+-- === ESP Toggle Logic ===
+espButton.MouseButton1Click:Connect(function()
+	espEnabled = not espEnabled
+	espButton.Text = espEnabled and "ESP ON" or "ESP OFF"
+
+	for _, box in pairs(adornments) do
+		box.Visible = espEnabled
+	end
+end)
+
+-- === Username input box for fling ===
+local usernameBox = Instance.new("TextBox")
+usernameBox.Name = "UsernameBox"
+usernameBox.Parent = gui
+usernameBox.Size = UDim2.new(0, 150, 0, 30)
+usernameBox.Position = UDim2.new(0, 20, 0, 250)
+usernameBox.PlaceholderText = "Enter username"
+usernameBox.Text = ""
+usernameBox.ClearTextOnFocus = false
+usernameBox.Font = Enum.Font.Gotham
+usernameBox.TextSize = 18
+usernameBox.TextColor3 = Color3.new(1,1,1)
+usernameBox.BackgroundColor3 = Color3.fromRGB(30,30,30)
+usernameBox.BorderSizePixel = 1
+usernameBox.BorderColor3 = Color3.fromRGB(255,0,0)
+
+-- === Fling toggle button ===
+local flingToggle = false
+local flingButton = Instance.new("TextButton")
+flingButton.Name = "FlingButton"
+flingButton.Parent = gui
+flingButton.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+flingButton.Position = UDim2.new(0, 20, 0, 290)
+flingButton.Size = UDim2.new(0, 150, 0, 40)
+flingButton.Font = Enum.Font.GothamBold
+flingButton.Text = "Start Fling"
+flingButton.TextColor3 = Color3.fromRGB(0, 255, 127)
+flingButton.TextSize = 20
